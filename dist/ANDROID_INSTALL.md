@@ -78,8 +78,12 @@ particles) is a pack-content problem; report the exact line.
    barely move.
 4. Drop one into simulated water: wool, planks and ice float, sand and stone sink.
 
-Bodies move block by block rather than smoothly: a script cannot draw a block
-between grid positions on Bedrock, so this is expected behaviour, not a bug.
+Airborne bodies are drawn by a full-size proxy cube that slides smoothly between
+blocks (stone, sand, dirt, wood, metal, wool, ice or leaves material), and the
+exact block is placed when it lands. If you ever see bodies step block by block
+instead, the proxy entity did not load: re-import both packs, make sure the
+resource pack is active, then check `/rw:diag` - it reports `mode=smooth` or
+`mode=blocks`.
 
 ## If literally nothing happens
 

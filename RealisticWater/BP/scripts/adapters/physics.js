@@ -1,28 +1,37 @@
 /**
  * Physics converter: turns ordinary blocks into weight-driven physics bodies.
  *
- * How it works in game
- *   - place `rw:physics_converter` (crafted from iron + redstone, or /give)
- *   - use it while holding any block: one of that block leaves your hand and
- *     becomes a body with its own mass, thrown in the direction you look
- *   - land a body in water and it either floats or sinks depending on mass
- *   - right-click a body with an empty hand to shove it (impulse / mass)
- *   - /rw:physics on also converts every block you place
+ * Movement is cell-accurate (see core/physics.js) because Bedrock refuses to draw
+ * a custom block anywhere but a block position. To make the motion look smooth
+ * anyway, an airborne body is drawn by a persistent proxy entity with a full-size
+ * cube geometry and a material texture, teleported every tick to an interpolated
+ * position between its cells. When the body comes to rest the proxy is removed and
+ * the exact block is placed, so the settled result is the real block, not a proxy.
  *
- * Bodies are real blocks: the world block is moved cell by cell, so what you see
- * and collide with is the actual block, and its drops/behaviour stay vanilla.
+ * If the proxy entity is unavailable (older build, missing resource pack) the
+ * adapter falls back to moving the real block one cell at a time, which is what
+ * earlier versions did.
+ *
+ * In game
+ *   - place `rw:physics_converter` (8 iron + 1 redstone, or /give) and use it
+ *     while holding any block: one block becomes a body thrown where you look
+ *   - right-click or hit a body to shove it (impulse / mass)
+ *   - /rw:physics on also converts every block you place
+ *   - /rw:diag reports the physics mode actually in use
  */
 import * as mc from '@minecraft/server';
-import { PhysicsWorld, massOf, massLabel, DEFAULT_PHYSICS } from '../core/physics.js';
+import {
+  PhysicsWorld, massOf, massLabel, bodyClass, DEFAULT_PHYSICS
+} from '../core/physics.js';
 import {
   WATER_ID, SOURCE_ID, SAND_ID, PARTICLE, log, getBlockSafe, isReplaceableId
 } from './bedrock.js';
 
 export const CONVERTER_ID = 'rw:physics_converter';
+export const BODY_TAG = 'rw_physics_body';
 const BODIES_PROP = 'rw:bodies';
 const PASSABLE = new Set([WATER_ID, SOURCE_ID, SAND_ID]);
 
-/** Permutation states of a block as a plain object (safe on any build). */
 function statesOf(permutation) {
   try { return permutation.getAllStates() ?? {}; } catch { return {}; }
 }
@@ -31,10 +40,27 @@ function isAirBlock(block) {
   try { return block.isAir === true; } catch { return false; }
 }
 
+function freeCell(block) {
+  if (!block) return false;
+  return isAirBlock(block) || PASSABLE.has(block.typeId) || isReplaceableId(block.typeId);
+}
+
+function gameMode(player) {
+  try { return String(player.getGameMode?.() ?? '').toLowerCase(); } catch { return ''; }
+}
+
 export function installPhysics(ctx) {
   /** @type {Map<string, {world: PhysicsWorld, dimension: any}>} */
   const worlds = new Map();
-  const state = { auto: !!ctx.settings?.bedrockPhysicsAuto, savedTick: 0 };
+  /** @type {Map<number, any>} body id -> proxy entity */
+  const proxies = new Map();
+  /** @type {Map<number, {x:number,y:number,z:number}>} body id -> smoothed visual position */
+  const visuals = new Map();
+  const state = {
+    auto: !!ctx.settings?.bedrockPhysicsAuto,
+    /** 'smooth' uses the proxy entity, 'blocks' is the fallback */
+    mode: 'smooth'
+  };
 
   function worldFor(dimension) {
     let entry = worlds.get(dimension.id);
@@ -43,55 +69,37 @@ export function installPhysics(ctx) {
     const grid = {
       isSolid(x, y, z) {
         const block = getBlockSafe(dimension, x, y, z);
-        if (!block) return true;               // unloaded chunks are walls
+        if (!block) return true;
         if (isAirBlock(block)) return false;
-        return !PASSABLE.has(block.typeId);    // water/sand are passable
+        return !PASSABLE.has(block.typeId);
       },
       waterAt(x, y, z) {
         const bridge = ctx.bridges.get(dimension.id);
         if (!bridge) return 0;
         try { return bridge.waterVolumeAt(x + 0.5, y + 0.5, z + 0.5); } catch { return 0; }
       },
+      /**
+       * Permission for a body to occupy a cell. Deliberately writes nothing: the
+       * proxy entity is the visible body while it is moving. Water in the cell is
+       * pushed out, which is what makes a falling block splash.
+       */
       tryMove(body, from, to) {
-        const target = getBlockSafe(dimension, to.x, to.y, to.z);
-        const source = getBlockSafe(dimension, from.x, from.y, from.z);
-        if (!target || !source) return false;
-
-        const targetId = target.typeId;
-        const free = isAirBlock(target) || PASSABLE.has(targetId) || isReplaceableId(targetId);
-        if (!free) return false;
-
-        let permutation;
-        try { permutation = mc.BlockPermutation.resolve(body.typeId, body.states ?? {}); }
-        catch (e) { log('physics permutation failed', body.typeId, e?.message ?? e); return false; }
+        const block = getBlockSafe(dimension, to.x, to.y, to.z);
+        if (!block) return false;
+        if (!freeCell(block)) return false;
 
         const bridge = ctx.bridges.get(dimension.id);
-        const water = bridge ? bridge.waterVolumeAt(to.x + 0.5, to.y + 0.5, to.z + 0.5) : 0;
-
-        try {
-          // displace the water in the cell the block is entering
-          if (bridge && water > 0.02) {
-            const f = bridge.solver.water;
-            const i = f ? f.index(to.x, to.y, to.z) : -1;
-            if (i >= 0) { f.vol[i] = 0; f.source[i] = 0; }
-            bridge.invalidate(to.x, to.y, to.z);
+        if (bridge) {
+          const f = bridge.solver.water;
+          const i = f ? f.index(to.x, to.y, to.z) : -1;
+          if (i >= 0 && f.vol[i] > 0.02) {
+            f.vol[i] = 0;
+            f.source[i] = 0;
           }
-          target.setPermutation(permutation);
-          if (source.typeId === body.typeId) {
-            source.setType('minecraft:air');
-          } else if (isAirBlock(source) === false) {
-            // our block was replaced while airborne: the body is gone
-            return false;
-          }
-          if (bridge) {
-            bridge.invalidate(to.x, to.y, to.z);
-            bridge.invalidate(from.x, from.y, from.z);
-          }
-          return true;
-        } catch (e) {
-          log('physics move failed', to.x, to.y, to.z, e?.message ?? e);
-          return false;
+          bridge.invalidate(to.x, to.y, to.z);
+          bridge.invalidate(from.x, from.y, from.z);
         }
+        return true;
       }
     };
 
@@ -107,25 +115,130 @@ export function installPhysics(ctx) {
     return entry;
   }
 
-  /** First free cell at or above (x,y,z). */
-  function freeCell(dimension, x, y, z, maxUp = 6) {
-    for (let i = 0; i <= maxUp; i++) {
-      const block = getBlockSafe(dimension, x, y + i, z);
-      if (!block) return null;
-      if (isAirBlock(block) || PASSABLE.has(block.typeId) || isReplaceableId(block.typeId)) {
-        return { x, y: y + i, z };
+  // -------------------------------------------------------------------------
+  // visuals
+  // -------------------------------------------------------------------------
+
+  function spawnProxy(dimension, body) {
+    if (state.mode === 'blocks') return null;
+    const identifier = `rw:body_${bodyClass(body.typeId)}`;
+    try {
+      const entity = dimension.spawnEntity(identifier, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
+      try { entity.addTag(BODY_TAG); } catch { /* tags optional */ }
+      try { entity.isPersistent = true; } catch { /* already persistent */ }
+      proxies.set(body.id, entity);
+      visuals.set(body.id, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
+      return entity;
+    } catch (e) {
+      // Proxy entity missing: fall back to the block-stepping renderer, once.
+      log('physics proxy unavailable, falling back to block motion:', e?.message ?? e);
+      state.mode = 'blocks';
+      return null;
+    }
+  }
+
+  function dropProxy(body) {
+    const entity = proxies.get(body.id);
+    proxies.delete(body.id);
+    visuals.delete(body.id);
+    if (!entity) return;
+    try { if (entity.isValid !== false) entity.remove(); } catch { /* already gone */ }
+  }
+
+  function proxyFor(entity) {
+    for (const [id, candidate] of proxies) {
+      if (candidate === entity) return id;
+    }
+    return undefined;
+  }
+
+  /** Interpolated position between cells, capped by speed so it never lags far. */
+  function smoothStep(body) {
+    const target = { x: body.x + 0.5, y: body.y, z: body.z + 0.5 };
+    const prev = visuals.get(body.id) ?? target;
+    const speed = Math.hypot(body.vx, body.vy, body.vz);
+    const maxStep = Math.max(0.35, speed / 20 * 1.8);
+    const clamp = (d) => (d > maxStep ? maxStep : (d < -maxStep ? -maxStep : d));
+    const next = {
+      x: prev.x + clamp(target.x - prev.x),
+      y: prev.y + clamp(target.y - prev.y),
+      z: prev.z + clamp(target.z - prev.z)
+    };
+    visuals.set(body.id, next);
+    return next;
+  }
+
+  // -------------------------------------------------------------------------
+  // block handoff
+  // -------------------------------------------------------------------------
+
+  function clearCells(dimension, body) {
+    const bridge = ctx.bridges.get(dimension.id);
+    if (bridge) {
+      const f = bridge.solver.water;
+      const i = f ? f.index(body.x, body.y, body.z) : -1;
+      if (i >= 0 && f.vol[i] > 0.02) { f.vol[i] = 0; f.source[i] = 0; }
+      bridge.invalidate(body.x, body.y, body.z);
+    }
+  }
+
+  /** Put the real block back. Returns true when it was placed. */
+  function materialize(dimension, body) {
+    let permutation;
+    try { permutation = mc.BlockPermutation.resolve(body.typeId, body.states ?? {}); }
+    catch (e) { log('physics materialise failed', body.typeId, e?.message ?? e); return false; }
+
+    const base = { x: Math.round(body.x), y: Math.round(body.y), z: Math.round(body.z) };
+    const existing = getBlockSafe(dimension, base.x, base.y, base.z);
+    if (existing && existing.typeId === body.typeId) return true; // block mode already placed it
+    for (let dy = 0; dy <= 3; dy++) {
+      const cell = { x: base.x, y: base.y + dy, z: base.z };
+      const block = getBlockSafe(dimension, cell.x, cell.y, cell.z);
+      if (!block || !freeCell(block)) continue;
+      try {
+        block.setPermutation(permutation);
+        const bridge = ctx.bridges.get(dimension.id);
+        if (bridge) {
+          const f = bridge.solver.water;
+          const i = f ? f.index(cell.x, cell.y, cell.z) : -1;
+          if (i >= 0) { f.vol[i] = 0; f.source[i] = 0; }
+          bridge.invalidate(cell.x, cell.y, cell.z);
+        }
+        return true;
+      } catch { /* try the next cell */ }
+    }
+    // No room: drop the block as an item rather than deleting it.
+    try {
+      dimension.spawnItem(new mc.ItemStack(body.typeId, 1),
+        { x: base.x + 0.5, y: base.y + 0.5, z: base.z + 0.5 });
+    } catch { /* item could not spawn */ }
+    return false;
+  }
+
+  /** Fallback renderer: keep a real block at the body's cell (one cell per tick). */
+  function blockProxySync(dimension, body, previous) {
+    const from = previous ?? body;
+    const moved = from.x !== body.x || from.y !== body.y || from.z !== body.z;
+    if (moved) {
+      const old = getBlockSafe(dimension, from.x, from.y, from.z);
+      if (old && old.typeId === body.typeId) {
+        try { old.setType('minecraft:air'); } catch { /* ignore */ }
       }
     }
-    return null;
+    const block = getBlockSafe(dimension, body.x, body.y, body.z);
+    if (!block || !freeCell(block)) return;
+    if (block.typeId === body.typeId) return; // already drawn
+    try {
+      block.setPermutation(mc.BlockPermutation.resolve(body.typeId, body.states ?? {}));
+      clearCells(dimension, body);
+    } catch { /* leave it to the next tick */ }
   }
 
-  function writeBlock(dimension, cell, permutation) {
-    const block = getBlockSafe(dimension, cell.x, cell.y, cell.z);
-    if (!block) return false;
-    try { block.setPermutation(permutation); return true; } catch { return false; }
-  }
+  // -------------------------------------------------------------------------
+  // spawning bodies
+  // -------------------------------------------------------------------------
 
-  /** Turn a block item into a body. Returns a message for the player. */
+  /** Turn a block item into a body. Returns a {ok, message} result. */
   function spawnFromItem(player, item, origin, throwIt = true) {
     if (!item) return { ok: false, message: 'Hold a block in your hand, then use the converter.' };
     let permutation;
@@ -134,12 +247,12 @@ export function installPhysics(ctx) {
 
     const dimension = player.dimension;
     const base = origin ?? player.location;
-    const cell = freeCell(dimension, Math.floor(base.x), Math.floor(base.y) + 1, Math.floor(base.z));
-    if (!cell) return { ok: false, message: 'No free space here for a physics body.' };
-
-    if (!writeBlock(dimension, cell, permutation)) {
-      return { ok: false, message: 'Could not place the block here.' };
+    let cell = null;
+    for (let dy = 1; dy <= 6 && !cell; dy++) {
+      const block = getBlockSafe(dimension, Math.floor(base.x), Math.floor(base.y) + dy, Math.floor(base.z));
+      if (block && freeCell(block)) cell = { x: block.location.x, y: block.location.y, z: block.location.z };
     }
+    if (!cell) return { ok: false, message: 'No free space here for a physics body.' };
 
     const entry = worldFor(dimension);
     const look = throwIt ? player.getViewDirection() : { x: 0, y: 0, z: 0 };
@@ -149,57 +262,66 @@ export function installPhysics(ctx) {
       x: cell.x, y: cell.y, z: cell.z,
       vx: look.x * 6, vy: 2.5 + look.y * 6, vz: look.z * 6
     });
+    spawnProxy(dimension, body);
 
-    if (world_getGameMode(player) !== 'creative') {
+    if (gameMode(player) !== 'creative') {
       try {
-        if (item.amount > 1) { item.amount -= 1; player.getComponent('minecraft:inventory')?.container?.setItem(player.selectedSlotIndex, item); }
-        else player.getComponent('minecraft:inventory')?.container?.setItem(player.selectedSlotIndex, undefined);
+        const container = player.getComponent('minecraft:inventory')?.container;
+        if (container) {
+          if (item.amount > 1) { item.amount -= 1; container.setItem(player.selectedSlotIndex, item); }
+          else container.setItem(player.selectedSlotIndex, undefined);
+        }
       } catch { /* inventory unavailable */ }
     }
 
     return {
       ok: true,
       body,
-      message: `Converted ${item.typeId} - ${massLabel(body.mass)}. Punch it with an empty hand to shove it.`
+      message: `Converted ${item.typeId} - ${massLabel(body.mass)}. Hit it to shove it.`
     };
   }
 
-  function world_getGameMode(player) {
-    try { return String(player.getGameMode?.() ?? '').toLowerCase(); } catch { return ''; }
-  }
-
-  /** Push whatever body occupies the cell. Returns true when one was hit. */
-  function pushAt(dimension, cell, dir) {
-    const entry = worlds.get(dimension.id);
-    if (!entry) return false;
-    const body = entry.world.bodyAt(cell.x, cell.y, cell.z);
-    if (!body) return false;
-    entry.world.push(body, dir);
-    try {
-      dimension.playSound('random.anvil_land', { x: cell.x + 0.5, y: cell.y + 0.5, z: cell.z + 0.5 },
-        { volume: Math.min(1, body.mass / 4000), pitch: 0.7 + Math.min(0.8, 40 / body.mass) });
-    } catch { /* sound unavailable */ }
-    return true;
-  }
-
-  /** Adopt an already placed block as a body (auto mode). */
+  /** Adopt an already placed block as a body (converter command / auto mode). */
   function adopt(player, block) {
     if (!block) return null;
     const dimension = block.dimension;
     const entry = worldFor(dimension);
     const loc = block.location;
     if (entry.world.bodyAt(loc.x, loc.y, loc.z)) return null;
-    let permutation;
-    try { permutation = block.permutation; } catch { return null; }
-    return entry.world.spawn({
-      typeId: block.typeId,
-      states: statesOf(permutation),
-      x: loc.x, y: loc.y, z: loc.z
+    let states;
+    try { states = statesOf(block.permutation); } catch { return null; }
+
+    if (state.mode !== 'blocks') {
+      try { block.setType('minecraft:air'); } catch { return null; }
+    }
+
+    const body = entry.world.spawn({
+      typeId: block.typeId, states, x: loc.x, y: loc.y, z: loc.z
     });
+    spawnProxy(dimension, body);
+    return body;
+  }
+
+  function pushBody(dimension, body, dir) {
+    if (!body) return false;
+    const entry = worldFor(dimension);
+    entry.world.push(body, dir);
+    try {
+      dimension.playSound('random.anvil_land',
+        { x: body.x + 0.5, y: body.y + 0.5, z: body.z + 0.5 },
+        { volume: Math.min(1, body.mass / 4000), pitch: 0.7 + Math.min(0.8, 40 / body.mass) });
+    } catch { /* sound unavailable */ }
+    return true;
+  }
+
+  function pushAt(dimension, cell, dir) {
+    const entry = worlds.get(dimension.id);
+    if (!entry) return false;
+    return pushBody(dimension, entry.world.bodyAt(cell.x, cell.y, cell.z), dir);
   }
 
   // -------------------------------------------------------------------------
-  // per-tick integration + presentation
+  // per-tick integration
   // -------------------------------------------------------------------------
 
   function tick(dimension) {
@@ -208,7 +330,38 @@ export function installPhysics(ctx) {
     const world = entry.world;
     if (!world.bodies.length) return 0;
 
+    /** @type {Map<number, {x:number,y:number,z:number}>} */
+    const before = new Map();
+    for (const body of world.bodies) before.set(body.id, { x: body.x, y: body.y, z: body.z });
+
     world.step(1 / 20);
+
+    for (const body of world.bodies.slice()) {
+      if (body.settled) {
+        // Hand the motion back to the world: real block in, proxy out.
+        if (state.mode === 'blocks') blockProxySync(dimension, body, before.get(body.id));
+        materialize(dimension, body);
+        dropProxy(body);
+        world.remove(body.id);
+        continue;
+      }
+
+      if (state.mode === 'blocks') {
+        blockProxySync(dimension, body, before.get(body.id));
+      } else {
+        const entity = proxies.get(body.id);
+        const position = smoothStep(body);
+        try {
+          if (entity && entity.isValid !== false) entity.teleport(position);
+          else if (!proxies.has(body.id)) spawnProxy(dimension, body);
+        } catch {
+          // lost the proxy (unloaded chunk, remove()): respawn once
+          proxies.delete(body.id);
+          visuals.delete(body.id);
+          spawnProxy(dimension, body);
+        }
+      }
+    }
 
     for (const s of world.splashes) {
       try { dimension.spawnParticle(PARTICLE.foam, { x: s.x + 0.5, y: s.y + 0.9, z: s.z + 0.5 }); } catch { /* ignore */ }
@@ -221,7 +374,6 @@ export function installPhysics(ctx) {
     }
     world.splashes.length = 0;
 
-    const entities = [];
     for (const impact of world.impacts) {
       try { dimension.spawnParticle(PARTICLE.dust, { x: impact.x + 0.5, y: impact.y + 0.2, z: impact.z + 0.5 }); } catch { /* ignore */ }
       if (impact.energy > 6000) {
@@ -231,7 +383,7 @@ export function installPhysics(ctx) {
         } catch { /* ignore */ }
       }
       const cfg = world.cfg;
-      if (impact.energy > cfg.damageEnergy && entities.length < 8) {
+      if (impact.energy > cfg.damageEnergy) {
         const damage = Math.max(1, Math.min(cfg.maxDamage, Math.round(impact.energy / cfg.damageEnergy)));
         try {
           const here = dimension.getEntitiesAtBlockLocation
@@ -239,18 +391,13 @@ export function installPhysics(ctx) {
             : [];
           for (const entity of here) {
             if (entity.typeId === 'minecraft:item') continue;
+            if (entity.hasTag?.(BODY_TAG)) continue;
             try { entity.applyDamage(damage, { cause: 'fall' }); } catch { /* immune */ }
           }
         } catch { /* API unavailable */ }
       }
     }
     world.impacts.length = 0;
-
-    // a body whose block vanished (mined, replaced) stops existing
-    for (const body of world.bodies.slice()) {
-      const block = getBlockSafe(dimension, body.x, body.y, body.z);
-      if (!block || block.typeId !== body.typeId) world.remove(body.id);
-    }
     return world.bodies.length;
   }
 
@@ -264,39 +411,54 @@ export function installPhysics(ctx) {
       const player = ev.player;
       if (!block || !player) return;
       if (ev.isFirstEvent === false) return;
-
+      if (block.typeId !== CONVERTER_ID) return;
       try {
-        if (block.typeId === CONVERTER_ID) {
-          const res = spawnFromItem(player, ev.itemStack, block.location);
-          if (res.message) player.sendMessage(res.message);
-          return;
-        }
-        // empty hand on a physics body: shove it
-        if (!ev.itemStack && pushAt(player.dimension, block.location, player.getViewDirection())) {
-          return;
-        }
-      } catch (e) { log('physics interact failed', e?.message ?? e); }
+        const res = spawnFromItem(player, ev.itemStack, block.location);
+        if (res.message) player.sendMessage(res.message);
+      } catch (e) { log('physics converter failed', e?.message ?? e); }
     });
-  } catch (e) { log('physics interact subscription failed', e?.message ?? e); }
+  } catch (e) { log('physics converter subscription failed', e?.message ?? e); }
 
-  // left-clicking a body also shoves it (guarded: the event is newer than some builds)
+  // shove a body: right-click it, or hit it
   try {
-    mc.world.afterEvents.entityHitBlock?.subscribe?.((ev) => {
-      const block = ev.hitBlock;
-      if (!block) return;
+    mc.world.afterEvents.playerInteractWithEntity.subscribe((ev) => {
+      if (ev.isFirstEvent === false) return;
+      const target = ev.target;
+      const player = ev.player;
+      if (!target || !player) return;
+      let isBody = false;
+      try { isBody = target.hasTag?.(BODY_TAG) === true; } catch { isBody = false; }
+      if (!isBody) return;
+      const id = proxyFor(target);
+      if (id === undefined) return;
+      const entry = worlds.get(player.dimension.id);
+      const body = entry?.world.bodies.find(b => b.id === id);
+      if (body) pushBody(player.dimension, body, player.getViewDirection());
+    });
+  } catch (e) { log('physics interact-with-entity subscription failed', e?.message ?? e); }
+
+  try {
+    mc.world.afterEvents.entityHitEntity?.subscribe?.((ev) => {
+      const target = ev.hitEntity;
+      if (!target?.hasTag?.(BODY_TAG)) return;
+      const id = proxyFor(target);
+      if (id === undefined) return;
+      const dimension = target.dimension;
+      const entry = worlds.get(dimension.id);
+      const body = entry?.world.bodies.find(b => b.id === id);
       const dir = ev.damagingEntity?.getViewDirection?.() ?? { x: 0, y: 1, z: 0 };
-      pushAt(block.dimension, block.location, dir);
+      if (body) pushBody(dimension, body, dir);
     });
   } catch { /* optional event */ }
 
-  // auto mode: every block a player places becomes a body
+  // physics mode: every block a player places becomes a body
   try {
     mc.world.afterEvents.blockPlace.subscribe((ev) => {
       if (!state.auto) return;
       const block = ev.block;
       if (!block) return;
       if (block.typeId === CONVERTER_ID) return;
-      if (block.typeId === WATER_ID || block.typeId === SOURCE_ID || block.typeId === SAND_ID) return;
+      if (PASSABLE.has(block.typeId)) return;
       try { adopt(ev.player, block); } catch (e) { log('physics adopt failed', e?.message ?? e); }
     });
   } catch (e) { log('physics blockPlace subscription failed', e?.message ?? e); }
@@ -311,13 +473,13 @@ export function installPhysics(ctx) {
     adopt,
     spawnFromItem,
     worlds,
+    mode: () => state.mode,
     isAuto: () => state.auto,
     setAuto(on) {
       state.auto = !!on;
       ctx.settings.bedrockPhysicsAuto = state.auto;
       return state.auto;
     },
-    /** Toggle physics for the block in front of the player (/rw:physics). */
     convertAhead(player) {
       const view = player.getViewDirection();
       const eye = player.getHeadLocation();
@@ -327,7 +489,7 @@ export function installPhysics(ctx) {
         const z = Math.floor(eye.z + view.z * d);
         const block = getBlockSafe(player.dimension, x, y, z);
         if (!block || isAirBlock(block)) continue;
-        if (block.typeId === WATER_ID || block.typeId === SOURCE_ID || block.typeId === SAND_ID) continue;
+        if (PASSABLE.has(block.typeId)) continue;
         const body = adopt(player, block);
         if (body) return `${block.typeId} converted - ${massLabel(body.mass)}`;
       }
@@ -335,22 +497,37 @@ export function installPhysics(ctx) {
     },
     statsLine() {
       const lines = [];
-      for (const [id, entry] of worlds) {
-        lines.push(`${id}: ${entry.world.statsLine()}`);
-      }
-      return lines.length ? `${lines.join('  |  ')}  auto=${state.auto ? 'on' : 'off'}` : `no physics bodies yet, auto=${state.auto ? 'on' : 'off'}`;
+      for (const [id, entry] of worlds) lines.push(`${id}: ${entry.world.statsLine()}`);
+      const head = lines.length ? lines.join('  |  ') : 'no physics bodies yet';
+      return `${head}  mode=${state.mode} auto=${state.auto ? 'on' : 'off'}`;
     },
     clear() {
       let n = 0;
-      for (const entry of worlds.values()) n += entry.world.clear();
+      for (const dimensionEntry of worlds.values()) {
+        for (const body of dimensionEntry.world.bodies) {
+          dropProxy(body);
+          if (state.mode === 'blocks') materialize(dimensionEntry.dimension, body);
+        }
+        n += dimensionEntry.world.clear();
+      }
       return n;
     },
-    /** Persist body cells so a reload can restore them (best effort). */
+    /** Remove stray proxy entities (called on world load before restoring). */
+    sweepProxies(dimension) {
+      let n = 0;
+      try {
+        const found = dimension.getEntities ? dimension.getEntities({ families: ['rw_body'] }) : [];
+        for (const entity of found) { try { entity.remove(); n++; } catch { /* gone */ } }
+      } catch { /* API unavailable */ }
+      proxies.clear();
+      visuals.clear();
+      return n;
+    },
     save() {
       const out = [];
       for (const [dimId, entry] of worlds) {
-        for (const b of entry.world.bodies) {
-          out.push([dimId, b.typeId, b.states, b.x, b.y, b.z]);
+        for (const body of entry.world.bodies) {
+          out.push([dimId, body.typeId, body.states, body.x, body.y, body.z]);
           if (out.length >= 120) break;
         }
       }
@@ -371,7 +548,8 @@ export function installPhysics(ctx) {
           try { dimension = mc.world.getDimension(dimId); } catch { dimension = null; }
           if (!dimension) continue;
           const entry = worldFor(dimension);
-          entry.world.spawn({ typeId, states, x, y, z });
+          const body = entry.world.spawn({ typeId, states, x, y, z });
+          spawnProxy(dimension, body);
           n++;
         } catch { /* skip stale row */ }
       }
@@ -379,8 +557,8 @@ export function installPhysics(ctx) {
     }
   };
 
-  log('physics converter ready: place a converter and use it with a block');
+  log('physics converter ready (smooth proxy mode); /rw:diag reports the active mode');
   return api;
 }
 
-export { massOf };
+export { massOf, bodyClass };

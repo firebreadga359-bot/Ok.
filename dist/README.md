@@ -112,8 +112,11 @@ crafted from 8 iron ingots around a redstone core, or `/give @s rw:physics_conve
 Use it while holding any block: one of that block leaves your hand and becomes a
 physics body thrown where you look. Punch a body with an empty hand to shove it.
 
-Bodies are real blocks (the world block is moved cell by cell), but velocity is
-continuous and every block keeps its own mass in kg:
+Airborne bodies are drawn by a full-size proxy cube that is interpolated between
+blocks every tick, so they fly and fall smoothly; the proxy wears the block's
+material (stone, sand, dirt, wood, metal, wool, ice, leaves). When a body comes to
+rest the proxy is removed and the **exact block** is placed, so what you end up
+with is the real block. Every block keeps its own mass in kg:
 
 | block | mass | in water |
 | --- | --- | --- |

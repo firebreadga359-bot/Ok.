@@ -166,3 +166,27 @@ Fixes and additions in this build:
 Still not verified in game (no Bedrock client or Android device here): the
 converter interaction, `/rw:diag` output, block-by-block body motion, buoyancy in
 the real simulation, recipe appearance and every performance figure.
+
+## 9. v1.3 - smooth body motion
+
+Requested: stop physics bodies from jumping one block at a time.
+
+Constraint: Bedrock will not render a custom block off the grid, so collision must
+stay cell-based. The motion is smoothed in the render layer instead:
+
+1. eight proxy entities (`rw:body_stone|dirt|sand|wood|metal|wool|ice|leaves`)
+   with gravity and collision disabled, a 1x1x1 box and a 16x16x16 cube geometry;
+2. the adapter teleports each proxy every tick to an interpolated position capped
+   by its speed, removing the visible cell snapping;
+3. `body.settled` (set when the core puts a body to sleep) triggers removal of the
+   proxy and placement of the real block permutation, so the resting result is the
+   actual block; if no cell is free the block is dropped as an item, never deleted;
+4. if `spawnEntity` fails the adapter falls back to `mode=blocks`, the previous
+   block-per-cell renderer, so the feature degrades instead of breaking;
+5. `/rw:diag` reports the active mode.
+
+Checks: 22 unit tests pass (2 new: settle flag, material class mapping), validator
+PASS with 8 BP + 8 RP entities, 27 geometry models and 15 textures, build OK.
+Not verified in game: that the proxy entities render (texture/geometry/render
+controller are structurally valid but unseen), that teleport interpolation looks
+smooth at 20 Hz, and the landing handoff timing.

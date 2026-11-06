@@ -94,6 +94,22 @@ const MASS_RULES = [
   ['moss', 400], ['sponge', 200], ['bamboo', 350], ['carpet', 30]
 ];
 
+/** Material classes used by the visual proxy entity (see adapters/physics.js). */
+export const BODY_CLASSES = ['stone', 'dirt', 'sand', 'wood', 'metal', 'wool', 'ice', 'leaves'];
+
+/** Which proxy texture an airborne body uses, chosen from its block id. */
+export function bodyClass(typeId) {
+  const id = String(typeId ?? '').replace('minecraft:', '');
+  if (/wool|carpet/.test(id)) return 'wool';
+  if (/leaves/.test(id)) return 'leaves';
+  if (/ice/.test(id)) return 'ice';
+  if (/plank|log|wood|fence|barrel|chest|bamboo|bookshelf/.test(id)) return 'wood';
+  if (/iron|gold|copper|netherite|diamond|emerald|anvil|metal|cauldron|chain/.test(id)) return 'metal';
+  if (/sand|gravel/.test(id)) return 'sand';
+  if (/dirt|grass|mud|clay|podzol|farmland|mycelium|moss|soul_soil/.test(id)) return 'dirt';
+  return 'stone';
+}
+
 /** Mass in kg for a block type id. Unknown blocks get a neutral 1500 kg. */
 export function massOf(typeId) {
   const id = String(typeId ?? '');
@@ -172,7 +188,9 @@ export class PhysicsWorld {
       submerged: 0,
       age: 0,
       rested: 0,
-      sleeping: false
+      sleeping: false,
+      /** true once at rest: the adapter swaps the visual proxy for the real block */
+      settled: false
     };
     this.bodies.push(body);
     this.byCell.set(PhysicsWorld.key(body.x, body.y, body.z), body.id);
@@ -244,6 +262,7 @@ export class PhysicsWorld {
       if (slow && body.onGround) {
         if (++body.rested >= c.sleepTicks) {
           body.sleeping = true;
+          body.settled = true;
           body.vx = body.vy = body.vz = 0;
         }
       } else {

@@ -176,6 +176,21 @@ it is mapped by capability rather than from a class.
 | `adapters/physics.js` | world grid adapter: `tryMove` writes the real block, clears the water cell it enters, invalidates the bridge cache; splash/impact presentation; entity damage from impact energy; `/rw:physics` API; `rw:bodies` persistence |
 | `DEFAULT_PHYSICS` | gravity 24, max 55 m/s, punch impulse 3000 N*s, 8 cells/tick anti-tunnel cap |
 
+### Smooth motion
+
+Collision stays cell-accurate (a custom block can only exist on the grid), so the
+smoothness is in the render layer:
+
+| Piece | Role |
+| --- | --- |
+| `rw:body_<class>` entities (8: stone, dirt, sand, wood, metal, wool, ice, leaves) | physics disabled (`has_gravity`/`has_collision` false), persistent, damage-immune, 1x1x1 collision box |
+| `geometry.rw_physics_body` | 16x16x16 cube, uv 0..16, one 16x16 proxy texture per class |
+| `controller.render.rw_physics_body` | shared controller: Geometry.default / Material.default / Texture.default, so each client entity carries its own material |
+| `adapters/physics.js` tick | teleports each proxy to `prev + clamp(target - prev, maxStep)` every tick; `maxStep = max(0.35, speed/20 * 1.8)` so it tracks velocity without lagging behind or overshooting |
+| `body.settled` (core) | set when a body sleeps; the adapter then removes the proxy and writes the real block permutation at the body cell, falling back to the cell above and finally to dropping the item so no block is ever deleted |
+| fallback | if `spawnEntity` fails the adapter switches to `mode=blocks` and moves the real block one cell per tick (the previous renderer) |
+
 Deliberate limits: one block per body (no soft-body deformation or rotation),
-grid-snapped motion (Bedrock cannot move a custom block smoothly from script),
-and at most 120 persisted bodies.
+cell-accurate collision (a body occupies whole cells even while the proxy is
+between them), proxy materials are per-class rather than per-block texture, and
+at most 120 persisted bodies.

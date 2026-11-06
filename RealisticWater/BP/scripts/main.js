@@ -302,7 +302,17 @@ try {
 world.afterEvents.worldLoad?.subscribe?.(() => {
   log('world loaded, realistic water ready');
   try { loadSettings(world.getDynamicProperty('rw:settings')); } catch { /* ignore */ }
-  try { commandApi.physics?.load(); } catch { /* ignore */ }
+  try {
+    const physics = commandApi.physics;
+    if (physics) {
+      // proxy entities from a previous session have no body behind them
+      for (const id of ['minecraft:overworld', 'minecraft:nether', 'minecraft:the_end']) {
+        try { physics.sweepProxies(mc.world.getDimension(id)); } catch { /* dim missing */ }
+      }
+      const restored = physics.load();
+      if (restored) log('restored', restored, 'physics bodies');
+    }
+  } catch { /* ignore */ }
   diag.add('world load event', true);
 });
 
