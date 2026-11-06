@@ -104,3 +104,33 @@ reasons, and `docs/TECHNICAL_REPORT.md` for the feature-by-feature mapping.
 * `docs/UNSUPPORTED.md` — what cannot be reproduced, and why
 * `docs/QA_REPORT.md` — what was actually tested, what could not be
 * `docs/BUILD.md` — reproducing the build
+
+## Block physics: the converter
+
+The add-on also ships a **Physics Converter** block (`rw:physics_converter`,
+crafted from 8 iron ingots around a redstone core, or `/give @s rw:physics_converter`).
+Use it while holding any block: one of that block leaves your hand and becomes a
+physics body thrown where you look. Punch a body with an empty hand to shove it.
+
+Bodies are real blocks (the world block is moved cell by cell), but velocity is
+continuous and every block keeps its own mass in kg:
+
+| block | mass | in water |
+| --- | --- | --- |
+| white wool | 40 kg | floats |
+| oak planks | 600 kg | floats |
+| ice | 917 kg | floats |
+| sand | 1.6 t | sinks |
+| stone | 2.6 t | sinks fast |
+| iron block | 7.9 t | sinks very fast |
+| gold block | 19.3 t | sinks very fast |
+
+- a hit delivers 3000 N*s, so `dv = impulse / mass`: wool flies, gold barely moves;
+- water is 1000 kg/m3, so anything lighter floats up when it lands in simulated
+  water and displaces that water (foam + splash);
+- a fast heavy impact hurts entities in the cell it hits (capped at 6 damage);
+- bodies stack, slide with friction and stop being simulated once at rest;
+- `/rw:physics on` makes every block you place a body, `convert` converts the
+  block you look at, `clear` removes all bodies;
+- `/rw:diag` lists every subsystem with OK/FAIL, which is the first thing to run
+  when something does not appear.

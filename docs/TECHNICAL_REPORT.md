@@ -161,3 +161,21 @@ meaning (`resolution`, `surfaceSubdivision`, `renderMaxStepsPerFrame`, `ffmpeg`,
    full stress tensor with friction-plane projection.
 5. Entity coupling is a light drag/buoyancy impulse, because custom blocks are not
    fluids to the Bedrock physics engine.
+
+## 7. Block physics converter (port addition)
+
+This feature does not exist in the Java mod; it was requested after the port, so
+it is mapped by capability rather than from a class.
+
+| Port piece | Purpose |
+| --- | --- |
+| `rw:physics_converter` block + `recipes/physics_converter.json` | player-facing converter (8 iron + 1 redstone) |
+| `core/physics.js` `massOf()` | per-block mass table (kg) with substring rules and a 1500 kg fallback |
+| `core/physics.js` `PhysicsWorld` | sub-stepped integrator: gravity, drag, ground friction, restitution, motion accumulator, cell-by-cell movement, stacking, sleep, impact records |
+| Archimedes term | `vy += g*dt*waterDensity*volume/mass`, so blocks under 1000 kg float and heavier ones sink |
+| `adapters/physics.js` | world grid adapter: `tryMove` writes the real block, clears the water cell it enters, invalidates the bridge cache; splash/impact presentation; entity damage from impact energy; `/rw:physics` API; `rw:bodies` persistence |
+| `DEFAULT_PHYSICS` | gravity 24, max 55 m/s, punch impulse 3000 N*s, 8 cells/tick anti-tunnel cap |
+
+Deliberate limits: one block per body (no soft-body deformation or rotation),
+grid-snapped motion (Bedrock cannot move a custom block smoothly from script),
+and at most 120 persisted bodies.

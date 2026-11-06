@@ -1,0 +1,39 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "rw:physics_converter",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.rw_converter"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "rw_converter_side",
+          "render_method": "opaque"
+        },
+        "up": {
+          "texture": "rw_converter_top",
+          "render_method": "opaque"
+        },
+        "down": {
+          "texture": "rw_converter_side",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 1.5
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 10
+      },
+      "minecraft:friction": 0.8,
+      "minecraft:light_emission": 5,
+      "minecraft:map_color": "#41525E"
+    }
+  }
+}

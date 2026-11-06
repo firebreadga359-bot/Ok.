@@ -3,4 +3,5 @@ pack.description=Water surface geometry, procedural textures, foam particles and
 block.rw:realistic_water=Realistic Water
 block.rw:realistic_water_source=Realistic Water Spring
 block.rw:realistic_sand=Realistic Sand
+block.rw:physics_converter=Physics Converter
 item.rw:realistic_water_bucket=Realistic Water Bucket

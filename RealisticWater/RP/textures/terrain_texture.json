@@ -15,6 +15,12 @@
     },
     "rw_sand_side": {
       "textures": "textures/blocks/rw_sand_side"
+    },
+    "rw_converter_top": {
+      "textures": "textures/blocks/rw_converter_top"
+    },
+    "rw_converter_side": {
+      "textures": "textures/blocks/rw_converter_side"
     }
   }
 }

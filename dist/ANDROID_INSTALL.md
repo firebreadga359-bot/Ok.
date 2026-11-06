@@ -67,3 +67,25 @@ then re-enter the world. Expected lines from this pack, prefixed
 
 Anything else (content errors about `rw:*` blocks, `blocks.json`, geometry or
 particles) is a pack-content problem; report the exact line.
+
+## Block physics
+
+1. Craft the converter (8 iron ingots around 1 redstone in a 3x3 grid), or
+   `/give @s rw:physics_converter`.
+2. Place it, hold any block (stone, wool, sand, gold...), and **use** the
+   converter. The block is thrown forward as a physics body.
+3. Punch a body with an **empty hand** to shove it; light blocks fly, heavy ones
+   barely move.
+4. Drop one into simulated water: wool, planks and ice float, sand and stone sink.
+
+Bodies move block by block rather than smoothly: a script cannot draw a block
+between grid positions on Bedrock, so this is expected behaviour, not a bug.
+
+## If literally nothing happens
+
+Run `/rw:diag`. It prints one line per subsystem marked `OK` or `FAIL` plus the
+engine error, the water field size, unseeded cell count and the physics body
+count. If every line says OK but there is no water, pour a normal water bucket
+while standing on open ground inside a loaded chunk. Version 1.2 fixed the bug
+that stopped the whole script from starting, which is why earlier builds could
+look completely dead.

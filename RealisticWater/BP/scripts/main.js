@@ -12,11 +12,15 @@ import { Presentation } from './adapters/presentation.js';
 import { subscribeStartup, subscribeScriptEvents, COMMAND_HELP } from './adapters/commands.js';
 import { registerItems } from './adapters/items.js';
 import { installVanilla } from './adapters/vanilla.js';
+import { installPhysics } from './adapters/physics.js';
 import {
   WATER_ID, SOURCE_ID, SAND_ID, log, writeWaterLevel, writeSandLayers, readCell, getBlockSafe
 } from './adapters/bedrock.js';
 
 const world = mc.world;
+// `system` must be bound explicitly: an unbound global throws a ReferenceError at
+// module load, which kills the whole script (water, sand, commands and all).
+const system = mc.system;
 
 /** @type {Map<string, Solver>} */
 const solvers = new Map();
@@ -126,8 +130,51 @@ const commandApi = {
   },
   reload,
   removeAll,
-  ball
+  ball,
+  /** installed below; null until the subsystem boots */
+  physics: null,
+  diag: () => diagLine()
 };
+
+// ---------------------------------------------------------------------------
+// startup diagnostics: one failing subsystem must not hide the others
+// ---------------------------------------------------------------------------
+
+const diag = {
+  entries: [],
+  add(name, ok, detail = '') { this.entries.push({ name, ok, detail }); return ok; }
+};
+
+function boot(name, fn) {
+  try {
+    const value = fn();
+    diag.add(name, value !== false, value === false ? 'unavailable on this build' : '');
+    return value;
+  } catch (e) {
+    diag.add(name, false, e?.message ?? String(e));
+    log('startup subsystem failed:', name, e?.message ?? e);
+    return null;
+  }
+}
+
+function diagLine() {
+  const lines = ['Realistic Water diagnostics:'];
+  for (const e of diag.entries) {
+    lines.push(`  ${e.ok ? 'OK  ' : 'FAIL'} ${e.name}${e.detail ? ' - ' + e.detail : ''}`);
+  }
+  const player = world.getAllPlayers()[0];
+  if (player) {
+    const solver = solvers.get(player.dimension.id);
+    const bridge = bridges.get(player.dimension.id);
+    lines.push(`  field: ${solver?.water ? `${solver.water.nx}x${solver.water.ny}x${solver.water.nz} at ${solver.water.minX},${solver.water.minY},${solver.water.minZ}` : 'not allocated yet'}`);
+    lines.push(`  unseeded cells: ${bridge ? bridge.seedRemaining() : '-'}`);
+    lines.push(`  water cells: ${solver?.stats.waterCells ?? 0}, sand cells: ${solver?.stats.sandCells ?? 0}`);
+  }
+  lines.push(`  physics: ${commandApi.physics ? commandApi.physics.statsLine() : 'not installed'}`);
+  lines.push(`  ticks: ${tickCounter}, tick errors: ${tickErrors}, radius: ${settings.bedrockFieldRadius}`);
+  lines.push('  If water still does not move, copy this list into the bug report.');
+  return lines.join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // block change plumbing
@@ -165,7 +212,9 @@ let tickCounter = 0;
 let warnedSeed = false;
 const PLAYER_TICK = 1 / 20;
 
-system.runInterval(() => {
+let tickErrors = 0;
+
+function simulate() {
   tickCounter++;
   const allPlayers = world.getAllPlayers();
   if (allPlayers.length === 0) return;
@@ -202,6 +251,11 @@ system.runInterval(() => {
     const changes = solver.step(PLAYER_TICK);
     bridge.applyChanges(changes);
 
+    // physics bodies move one real block at a time, after the fluid step so
+    // displaced water is written in the same tick
+    try { commandApi.physics?.tick(dim); } catch (e) { log('physics tick failed', e?.message ?? e); }
+    if (tickCounter % 200 === 0) { try { commandApi.physics?.save(); } catch { /* quota */ } }
+
     presentation.spawnWhitewater(dim, solver.particles);
     presentation.flowAudio(dim, solver, players, settings);
     presentation.updateFog(players, bridge, settings);
@@ -210,17 +264,28 @@ system.runInterval(() => {
       presentation.spawnSandDust(dim, solver, 6);
     }
   }
+}
+
+system.runInterval(() => {
+  try {
+    simulate();
+  } catch (e) {
+    // one broken cell must never stop the whole simulation
+    if (++tickErrors <= 3) log('simulation tick failed', e?.message ?? e);
+  }
 }, 1);
 
 // ---------------------------------------------------------------------------
 // registration
 // ---------------------------------------------------------------------------
 
-subscribeStartup(commandApi);
-subscribeScriptEvents(commandApi);
-registerItems({ bridges, settings });
+boot('custom commands', () => subscribeStartup(commandApi));
+boot('scriptevent fallback', () => subscribeScriptEvents(commandApi));
+boot('bucket and sand items', () => registerItems({ bridges, settings }) ?? true);
 // normal water buckets and normal sand blocks work without any command
-installVanilla({ bridges, settings, world });
+boot('vanilla water/sand conversion', () => installVanilla({ bridges, settings, world }) ?? true);
+// blocks into physics bodies via the converter
+commandApi.physics = boot('physics converter', () => installPhysics({ bridges, settings, world, system })) || null;
 
 // first join helper: hand out the bucket + sand once per player
 try {
@@ -229,7 +294,7 @@ try {
     const player = ev.player;
     if (!player.getDynamicProperty('rw:kit')) {
       player.setDynamicProperty('rw:kit', true);
-      player.sendMessage('Realistic Water loaded. Use a normal water bucket or plain sand to start; /rw:help for commands.');
+      player.sendMessage('Realistic Water loaded. Pour a normal water bucket, place plain sand, or use a physics converter. /rw:diag checks that everything booted.');
     }
   });
 } catch (e) { log('playerSpawn unavailable', e?.message ?? e); }
@@ -237,6 +302,8 @@ try {
 world.afterEvents.worldLoad?.subscribe?.(() => {
   log('world loaded, realistic water ready');
   try { loadSettings(world.getDynamicProperty('rw:settings')); } catch { /* ignore */ }
+  try { commandApi.physics?.load(); } catch { /* ignore */ }
+  diag.add('world load event', true);
 });
 
 log('Realistic Water port active. Vanilla water/sand convert automatically. Help lines:', COMMAND_HELP.length);

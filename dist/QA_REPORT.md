@@ -141,3 +141,28 @@ These are **not** passes. They are untested and must be verified on a device:
 10. Second device/player joins → both see the same water; non-op cannot use `/rw:*`.
 11. `/rw:set filmFriction 60`, `/rw:quality low|ultra` → no errors, behaviour changes.
 12. If commands are missing, repeat step 3 with `/scriptevent rw:ball 5`.
+
+## 8. v1.2 - why "nothing worked" and what was fixed
+
+Reported symptom: after importing, no water, no sand, no messages, no commands.
+
+Root cause: `main.js` called `system.runInterval(...)` while `system` was never
+bound (`import * as mc from '@minecraft/server'` only). That is a `ReferenceError`
+thrown during module evaluation, so no part of the script ran - the block
+registration, events, commands and simulation were all downstream of it.
+
+Fixes and additions in this build:
+
+1. `const system = mc.system;` is now bound explicitly.
+2. The tick body is wrapped in `try/catch`, so a single bad cell cannot stop the
+   simulation; the first three failures are logged to the content log.
+3. Every subsystem boots through `boot(name, fn)`, which records OK/FAIL instead
+   of throwing, and `/rw:diag` prints that list with the field size, unseeded
+   cells, water/sand counts and physics body count.
+4. Physics converter (§TECHNICAL_REPORT 7) with per-block mass, buoyancy, impacts
+   and 7 new unit tests; the validator now also checks recipes.
+5. 20 tests total pass (13 simulation + 7 physics), validator PASS, build OK.
+
+Still not verified in game (no Bedrock client or Android device here): the
+converter interaction, `/rw:diag` output, block-by-block body motion, buoyancy in
+the real simulation, recipe appearance and every performance figure.

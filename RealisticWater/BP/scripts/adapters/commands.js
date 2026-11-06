@@ -25,6 +25,8 @@ export const COMMAND_HELP = [
   '/rw:set <name> <value> - change a simulation setting',
   '/rw:settings - list settings',
   '/rw:quality low|medium|high|ultra - apply a quality preset',
+  '/rw:physics [on|off|convert|clear] - block physics converter',
+  '/rw:diag - which subsystems loaded (use this if nothing happens)',
   'Fallback: /scriptevent rw:<command> [args]'
 ];
 
@@ -93,6 +95,27 @@ export function registerCommands(api) {
         api.world.setDynamicProperty('rw:settings', serializeSettings());
         reply(origin, `quality = ${name}`);
       }),
+    make('rw:physics', 'Convert blocks into weight-driven physics bodies',
+      [{ name: 'mode', type: 'string', optional: true }],
+      (origin, args) => {
+        const sim = api.physics;
+        if (!sim) { reply(origin, 'physics subsystem did not load - run /rw:diag'); return; }
+        const mode = String(args?.[0] ?? 'status').toLowerCase();
+        if (mode === 'on' || mode === 'off') {
+          reply(origin, `physics auto-convert ${sim.setAuto(mode === 'on') ? 'on: every block you place becomes a body' : 'off'}`);
+          api.world.setDynamicProperty('rw:settings', serializeSettings());
+          return;
+        }
+        if (mode === 'convert') {
+          const player = origin?.sourceEntity;
+          reply(origin, player ? sim.convertAhead(player) : 'Run this as a player');
+          return;
+        }
+        if (mode === 'clear') { reply(origin, `removed ${sim.clear()} physics bodies`); return; }
+        reply(origin, sim.statsLine());
+      }),
+    make('rw:diag', 'Report which subsystems loaded', [],
+      (origin) => { reply(origin, api.diag ? api.diag() : 'diagnostics unavailable'); }),
     make('rw:help', 'List realistic water commands', [],
       (origin) => { reply(origin, COMMAND_HELP.join('\n')); })
   ].filter(Boolean);
@@ -182,6 +205,24 @@ export function handleScriptEvent(event, api) {
       reply(origin, `quality = ${name}`);
       return true;
     }
+    case 'physics': {
+      const sim = api.physics;
+      if (!sim) { reply(origin, 'physics subsystem did not load - run /rw:diag'); return true; }
+      const mode = String(args[0] ?? 'status').toLowerCase();
+      if (mode === 'on' || mode === 'off') {
+        reply(origin, `physics auto-convert ${sim.setAuto(mode === 'on') ? 'on' : 'off'}`);
+      } else if (mode === 'convert') {
+        reply(origin, origin.sourceEntity ? sim.convertAhead(origin.sourceEntity) : 'Run this as a player');
+      } else if (mode === 'clear') {
+        reply(origin, `removed ${sim.clear()} physics bodies`);
+      } else {
+        reply(origin, sim.statsLine());
+      }
+      return true;
+    }
+    case 'diag':
+      reply(origin, api.diag ? api.diag() : 'diagnostics unavailable');
+      return true;
     case 'reset':
       applyPreset('high');
       Object.assign(settings, DEFAULTS_FROZEN);
