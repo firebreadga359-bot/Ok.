@@ -21,7 +21,7 @@
  */
 import * as mc from '@minecraft/server';
 import {
-  PhysicsWorld, massOf, massLabel, bodyClass, DEFAULT_PHYSICS
+  PhysicsWorld, massOf, massLabel, bodyClass, bodyEntityId, DEFAULT_PHYSICS
 } from '../core/physics.js';
 import {
   WATER_ID, SOURCE_ID, SAND_ID, PARTICLE, log, getBlockSafe, isReplaceableId
@@ -52,10 +52,12 @@ function gameMode(player) {
 export function installPhysics(ctx) {
   /** @type {Map<string, {world: PhysicsWorld, dimension: any}>} */
   const worlds = new Map();
-  /** @type {Map<number, any>} body id -> proxy entity */
+  /** @type {Map<string, any>} "<dimension>|<body id>" -> proxy entity */
   const proxies = new Map();
-  /** @type {Map<number, {x:number,y:number,z:number}>} body id -> smoothed visual position */
+  /** @type {Map<string, {x:number,y:number,z:number}>} same key -> smoothed visual position */
   const visuals = new Map();
+  /** @type {Map<string, string>} block type -> proxy identifier that worked for it */
+  const proxyForType = new Map();
   const state = {
     auto: !!ctx.settings?.bedrockPhysicsAuto,
     /** 'smooth' uses the proxy entity, 'blocks' is the fallback */
@@ -119,43 +121,65 @@ export function installPhysics(ctx) {
   // visuals
   // -------------------------------------------------------------------------
 
-  function spawnProxy(dimension, body) {
-    if (state.mode === 'blocks') return null;
-    const identifier = `rw:body_${bodyClass(body.typeId)}`;
-    try {
-      const entity = dimension.spawnEntity(identifier, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
-      try { entity.addTag(BODY_TAG); } catch { /* tags optional */ }
-      try { entity.isPersistent = true; } catch { /* already persistent */ }
-      proxies.set(body.id, entity);
-      visuals.set(body.id, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
-      return entity;
-    } catch (e) {
-      // Proxy entity missing: fall back to the block-stepping renderer, once.
-      log('physics proxy unavailable, falling back to block motion:', e?.message ?? e);
-      state.mode = 'blocks';
-      return null;
-    }
+  /**
+   * Bodies are numbered per dimension, so proxy lookups must be scoped by the
+   * dimension: two bodies in different dimensions can share a numeric id.
+   */
+  const proxyKey = (dimension, body) => `${dimension.id}|${body.id}`;
+
+  /** Exact block texture first, material class second. */
+  function proxyCandidates(body) {
+    const exact = bodyEntityId(body.typeId);
+    const fallback = `rw:body_${bodyClass(body.typeId)}`;
+    return exact === fallback ? [exact] : [exact, fallback];
   }
 
-  function dropProxy(body) {
-    const entity = proxies.get(body.id);
-    proxies.delete(body.id);
-    visuals.delete(body.id);
+  function spawnProxy(dimension, body) {
+    if (state.mode === 'blocks') return null;
+    const key = proxyKey(dimension, body);
+    const known = proxyForType.get(body.typeId);
+    const candidates = known ? [known, ...proxyCandidates(body)] : proxyCandidates(body);
+    for (const identifier of candidates) {
+      try {
+        const entity = dimension.spawnEntity(identifier, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
+        try { entity.addTag(BODY_TAG); } catch { /* tags optional */ }
+        try { entity.isPersistent = true; } catch { /* already persistent */ }
+        proxyForType.set(body.typeId, identifier);
+        proxies.set(key, entity);
+        visuals.set(key, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 });
+        return entity;
+      } catch { /* try the next candidate */ }
+    }
+    // Not even the material class exists: fall back to the block-stepping renderer.
+    log('physics proxy entity unavailable, falling back to block motion');
+    state.mode = 'blocks';
+    return null;
+  }
+
+  function dropProxy(dimension, body) {
+    const key = proxyKey(dimension, body);
+    const entity = proxies.get(key);
+    proxies.delete(key);
+    visuals.delete(key);
     if (!entity) return;
     try { if (entity.isValid !== false) entity.remove(); } catch { /* already gone */ }
   }
 
+  /** @returns {{dimId: string, bodyId: number}|undefined} */
   function proxyFor(entity) {
-    for (const [id, candidate] of proxies) {
-      if (candidate === entity) return id;
+    for (const [key, candidate] of proxies) {
+      if (candidate !== entity) continue;
+      const cut = key.lastIndexOf('|');
+      return { dimId: key.slice(0, cut), bodyId: Number(key.slice(cut + 1)) };
     }
     return undefined;
   }
 
   /** Interpolated position between cells, capped by speed so it never lags far. */
-  function smoothStep(body) {
+  function smoothStep(dimension, body) {
+    const key = proxyKey(dimension, body);
     const target = { x: body.x + 0.5, y: body.y, z: body.z + 0.5 };
-    const prev = visuals.get(body.id) ?? target;
+    const prev = visuals.get(key) ?? target;
     const speed = Math.hypot(body.vx, body.vy, body.vz);
     const maxStep = Math.max(0.35, speed / 20 * 1.8);
     const clamp = (d) => (d > maxStep ? maxStep : (d < -maxStep ? -maxStep : d));
@@ -164,7 +188,7 @@ export function installPhysics(ctx) {
       y: prev.y + clamp(target.y - prev.y),
       z: prev.z + clamp(target.z - prev.z)
     };
-    visuals.set(body.id, next);
+    visuals.set(key, next);
     return next;
   }
 
@@ -341,25 +365,29 @@ export function installPhysics(ctx) {
         // Hand the motion back to the world: real block in, proxy out.
         if (state.mode === 'blocks') blockProxySync(dimension, body, before.get(body.id));
         materialize(dimension, body);
-        dropProxy(body);
+        dropProxy(dimension, body);
         world.remove(body.id);
         continue;
       }
 
       if (state.mode === 'blocks') {
         blockProxySync(dimension, body, before.get(body.id));
-      } else {
-        const entity = proxies.get(body.id);
-        const position = smoothStep(body);
-        try {
-          if (entity && entity.isValid !== false) entity.teleport(position);
-          else if (!proxies.has(body.id)) spawnProxy(dimension, body);
-        } catch {
-          // lost the proxy (unloaded chunk, remove()): respawn once
-          proxies.delete(body.id);
-          visuals.delete(body.id);
-          spawnProxy(dimension, body);
-        }
+        continue;
+      }
+
+      const key = proxyKey(dimension, body);
+      const entity = proxies.get(key);
+      if (!entity || entity.isValid === false) {
+        // proxy lost (chunk reload, /kill): make a fresh one
+        proxies.delete(key);
+        visuals.delete(key);
+        spawnProxy(dimension, body);
+        continue;
+      }
+      try {
+        entity.teleport(smoothStep(dimension, body));
+      } catch {
+        // a teleport can fail while the chunk is unloaded; retry next tick
       }
     }
 
@@ -429,10 +457,10 @@ export function installPhysics(ctx) {
       let isBody = false;
       try { isBody = target.hasTag?.(BODY_TAG) === true; } catch { isBody = false; }
       if (!isBody) return;
-      const id = proxyFor(target);
-      if (id === undefined) return;
-      const entry = worlds.get(player.dimension.id);
-      const body = entry?.world.bodies.find(b => b.id === id);
+      const ref = proxyFor(target);
+      if (!ref) return;
+      const entry = worlds.get(ref.dimId);
+      const body = entry?.world.bodies.find(b => b.id === ref.bodyId);
       if (body) pushBody(player.dimension, body, player.getViewDirection());
     });
   } catch (e) { log('physics interact-with-entity subscription failed', e?.message ?? e); }
@@ -441,11 +469,11 @@ export function installPhysics(ctx) {
     mc.world.afterEvents.entityHitEntity?.subscribe?.((ev) => {
       const target = ev.hitEntity;
       if (!target?.hasTag?.(BODY_TAG)) return;
-      const id = proxyFor(target);
-      if (id === undefined) return;
+      const ref = proxyFor(target);
+      if (!ref) return;
       const dimension = target.dimension;
-      const entry = worlds.get(dimension.id);
-      const body = entry?.world.bodies.find(b => b.id === id);
+      const entry = worlds.get(ref.dimId);
+      const body = entry?.world.bodies.find(b => b.id === ref.bodyId);
       const dir = ev.damagingEntity?.getViewDirection?.() ?? { x: 0, y: 1, z: 0 };
       if (body) pushBody(dimension, body, dir);
     });
@@ -504,9 +532,10 @@ export function installPhysics(ctx) {
     clear() {
       let n = 0;
       for (const dimensionEntry of worlds.values()) {
+        // put every block back before dropping its visual, in every mode
         for (const body of dimensionEntry.world.bodies) {
-          dropProxy(body);
-          if (state.mode === 'blocks') materialize(dimensionEntry.dimension, body);
+          materialize(dimensionEntry.dimension, body);
+          dropProxy(dimensionEntry.dimension, body);
         }
         n += dimensionEntry.world.clear();
       }

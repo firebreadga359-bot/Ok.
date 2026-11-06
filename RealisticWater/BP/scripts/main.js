@@ -62,23 +62,8 @@ function nearestPlayer(dimensionId, x, y, z) {
   return best;
 }
 
-/** Drop a cube of material in front of the player (/rw:ball, /rw:sand). */
-function ball(origin, size, material) {
-  const player = origin?.sourceEntity;
-  if (!player || !player.location) return 'Run this as a player';
-  const s = Math.max(1, Math.min(32, size | 0));
-  const solver = solverFor(player.dimension.id);
-  const bridge = bridgeFor(player.dimension);
-  const view = player.getViewDirection();
-  const eye = player.getHeadLocation();
-  const cx = eye.x + view.x * (s + 3);
-  const cy = eye.y + view.y * (s + 3);
-  const cz = eye.z + view.z * (s + 3);
-  const half = s * 0.5;
-  const n = solver.addEmitBox(cx - half, cy - half, cz - half, cx + half, cy + half, cz + half, material);
-  bridge.cache.clear();
-  return `Dropped a ${s}^3 block cube of ${material === 'SAND' ? 'sand' : 'water'} (${n} cells)`;
-}
+/** Radius of the world sweep behind /rw:remove. */
+const REMOVE_RADIUS = 12;
 
 /** Delete simulated blocks around the player (/rw:remove). */
 function removeAll(origin, what) {
@@ -90,21 +75,28 @@ function removeAll(origin, what) {
   const f = solver.water;
   if (!f) return 'Nothing to remove';
   const material = String(what ?? 'all').toLowerCase();
+  const loc = player.location;
+  const cx = Math.floor(loc.x), cy = Math.floor(loc.y), cz = Math.floor(loc.z);
   let removed = 0;
-  for (let i = 0; i < f.count; i++) {
-    const x = f.minX + (i % f.nx);
-    const y = f.minY + (Math.floor(i / f.nx) % f.ny);
-    const z = f.minZ + Math.floor(i / (f.nx * f.ny));
-    const b = getBlockSafe(dim, x, y, z);
-    if (!b) continue;
-    if (b.typeId === WATER_ID || b.typeId === SOURCE_ID) {
-      if (material === 'sand') continue;
-      writeWaterLevel(dim, x, y, z, -1);
-      removed++;
-    } else if (b.typeId === SAND_ID) {
-      if (material === 'water') continue;
-      writeSandLayers(dim, x, y, z, 0);
-      removed++;
+  // Bounded on purpose: the field can hold ~100k cells, and one engine read per
+  // cell would stall the server (the whole tick budget) for a cleanup command.
+  for (let dy = -REMOVE_RADIUS; dy <= REMOVE_RADIUS; dy++) {
+    for (let dz = -REMOVE_RADIUS; dz <= REMOVE_RADIUS; dz++) {
+      for (let dx = -REMOVE_RADIUS; dx <= REMOVE_RADIUS; dx++) {
+        const x = cx + dx, y = cy + dy, z = cz + dz;
+        if (f.index(x, y, z) < 0) continue;
+        const b = getBlockSafe(dim, x, y, z);
+        if (!b) continue;
+        if (b.typeId === WATER_ID || b.typeId === SOURCE_ID) {
+          if (material === 'sand') continue;
+          writeWaterLevel(dim, x, y, z, -1);
+          removed++;
+        } else if (b.typeId === SAND_ID) {
+          if (material === 'water') continue;
+          writeSandLayers(dim, x, y, z, 0);
+          removed++;
+        }
+      }
     }
   }
   solver.clearAll(material === 'sand' ? 'SAND' : (material === 'water' ? 'WATER' : 'BOTH'));
@@ -130,7 +122,6 @@ const commandApi = {
   },
   reload,
   removeAll,
-  ball,
   /** installed below; null until the subsystem boots */
   physics: null,
   diag: () => diagLine()
@@ -294,7 +285,7 @@ try {
     const player = ev.player;
     if (!player.getDynamicProperty('rw:kit')) {
       player.setDynamicProperty('rw:kit', true);
-      player.sendMessage('Realistic Water loaded. Pour a normal water bucket, place plain sand, or use a physics converter. /rw:diag checks that everything booted.');
+      player.sendMessage('Realistic Water loaded. The blocks are in the creative inventory (search "Realistic"), plain water and sand convert by themselves, and a physics converter turns any block into a physics body. /rw:diag checks that everything booted.');
     }
   });
 } catch (e) { log('playerSpawn unavailable', e?.message ?? e); }

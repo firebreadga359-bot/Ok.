@@ -26,11 +26,14 @@ itself — water only exists where you pour it or drop it with a command.
 1. Pour water with a **normal water bucket** on open ground. The poured cell
    becomes a spring and the connected pool starts flowing.
 2. Place **normal sand**. That block becomes realistic sand: it settles, avalanches
-   and slumps underwater. Using normal sand on it again stacks layers.
-3. Optional: `/rw:stats` shows live cells/levels — the fastest proof the solver is
-   running. `/rw:help` lists the extra tools (`/rw:ball`, `/rw:sand`, `/rw:set`,
-   `/rw:quality`, `/rw:remove`) if you want them.
-4. Oceans and lakes are deliberately left as vanilla water; a bucket pour converts
+   and slumps underwater.
+3. In creative, open the inventory and search `Realistic`: the water block, the
+   sand block, the spring, the bucket and the physics converter are all there. No
+   `/give` and no commands are needed to get them.
+4. Optional: `/rw:stats` shows live cells/levels — the fastest proof the solver is
+   running. `/rw:help` lists the remaining tools (`/rw:set`, `/rw:quality`,
+   `/rw:reload`, `/rw:remove`).
+5. Oceans and lakes are deliberately left as vanilla water; a bucket pour converts
    a pool of up to 320 blocks within 8 blocks of the pour.
 
 ## When the packs import but nothing appears
@@ -44,12 +47,12 @@ Work down this list; each step tells you which layer is failing.
 | World was made before importing | Pack list was fixed at creation | Edit the world and activate both packs, or make a new world |
 | No chat message on join, `/rw:stats` does nothing | Script module isn't running | Confirm Minecraft is **26.2 or newer** (`min_engine_version` 1.26.2); older clients refuse the pack silently |
 | `/rw:*` unknown command, but `/scriptevent rw:stats` works | Custom command registry unavailable on this build | Use `/scriptevent rw:<command> [args]` for everything |
-| `/rw:stats` says `no simulation yet` | Nothing to simulate yet, or you are outside the field | Pour water with the bucket, or `/rw:ball 3`; the field follows you and seeds within ~1 s |
+| `/rw:stats` says `no simulation yet` | Nothing to simulate yet, or you are outside the field | Pour water with the bucket, or place the Realistic Water block from the inventory; the field follows you and seeds within ~1 s |
 | Nothing visible after pouring | Block behind the clicked face is solid | Aim at open air/grass and use again; the pack replies `Not enough room to place realistic water here` |
-| A small splash vanished after ~1.5 s | By design: thin films strand and evaporate (`strandedTime`) | Use the bucket (infinite spring) or `/rw:ball` for a body that persists |
-| Normal bucket water stays vanilla | Body larger than 320 blocks, or the chunk wasn't loaded at pour time | Pour into a smaller pool, or use `/rw:ball` inside the loaded area |
+| A small splash vanished after ~1.5 s | By design: thin films strand and evaporate (`strandedTime`) | Use the bucket (infinite spring) or the Realistic Water Spring block for water that persists |
+| Normal bucket water stays vanilla | Body larger than 320 blocks, or the chunk wasn't loaded at pour time | Pour into a smaller pool, or place the Realistic Water block from the inventory instead |
 | Normal sand stays vanilla | Sand was placed by a non-player source (structure, dispenser) | Only player-placed sand converts; break and replace it |
-| Items not in Creative inventory | Search "Realistic" in the search tab | `/give @s rw:realistic_water_bucket` always works |
+| Blocks/items not in the Creative inventory | Search "Realistic" in the inventory search tab | They are filed under *Nature* (water, sand, spring) and *Items* (bucket, converter); scroll those groups if the search box misses them |
 | Water/piles left from an older import | Field cache is stale | `/rw:reload` |
 | Heavy stutter | Field volume too large for the device | `/rw:quality low`, or `/rw:pause`, or `/rw:remove all` |
 
@@ -70,8 +73,8 @@ particles) is a pack-content problem; report the exact line.
 
 ## Block physics
 
-1. Craft the converter (8 iron ingots around 1 redstone in a 3x3 grid), or
-   `/give @s rw:physics_converter`.
+1. Craft the converter (8 iron ingots around 1 redstone in a 3x3 grid), or take
+   it from the creative inventory (search "Converter").
 2. Place it, hold any block (stone, wool, sand, gold...), and **use** the
    converter. The block is thrown forward as a physics body.
 3. Punch a body with an **empty hand** to shove it; light blocks fly, heavy ones

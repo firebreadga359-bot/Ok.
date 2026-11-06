@@ -117,7 +117,8 @@ detail on top of the geometry.
 | `realistic_water` fluid + `LiquidBlock` with `infinite` | `rw:realistic_water` (16 levels, no collision, replaceable) + `rw:realistic_water_source` (infinite spring) |
 | `realistic_water_bucket` (`BucketItem`) | `rw:realistic_water_bucket` item; script pours a spring, sneak-use refills, vanilla bucket returned |
 | `realistic_sand` (8 layers) + `BlockItem` | `rw:realistic_sand` layered block with generated loot table |
-| `/water stats,pause,reload,ball,sand,remove,set,settings` | `/rw:stats`, `/rw:pause`, `/rw:reload`, `/rw:ball`, `/rw:sand`, `/rw:remove`, `/rw:set`, `/rw:settings`, `/rw:quality`, `/rw:help` through `CustomCommandRegistry` (stable API) and `/scriptevent rw:*` fallback |
+| Creative tab entries (`ItemGroup` registration) | `menu_category` in every `rw:` block/item description (*Nature* for water, spring and sand; *Items* for bucket and converter). Blocks with states list their **highest** state value first, because Bedrock uses the first value as the default: a block taken from the inventory is a full water block / full 8-layer sand block, not an empty one |
+| `/water stats,pause,reload,ball,sand,remove,set,settings` | `/rw:stats`, `/rw:pause`, `/rw:reload`, `/rw:remove`, `/rw:set`, `/rw:settings`, `/rw:quality`, `/rw:help` through `CustomCommandRegistry` (stable API) and `/scriptevent rw:*` fallback. `ball` and `sand` were dropped: they existed only to hand out blocks, and those blocks are in the creative inventory now |
 | `/water render` (ClipRecorder) | Not ported (no render hook); see UNSUPPORTED |
 | `WaterSyncPayload`/`SandSyncPayload`/`RemoveAllWaterPayload` | Not needed: server-side simulation writes block states directly; removal is `/rw:remove` |
 
@@ -173,7 +174,7 @@ it is mapped by capability rather than from a class.
 | `core/physics.js` `massOf()` | per-block mass table (kg) with substring rules and a 1500 kg fallback |
 | `core/physics.js` `PhysicsWorld` | sub-stepped integrator: gravity, drag, ground friction, restitution, motion accumulator, cell-by-cell movement, stacking, sleep, impact records |
 | Archimedes term | `vy += g*dt*waterDensity*volume/mass`, so blocks under 1000 kg float and heavier ones sink |
-| `adapters/physics.js` | world grid adapter: `tryMove` writes the real block, clears the water cell it enters, invalidates the bridge cache; splash/impact presentation; entity damage from impact energy; `/rw:physics` API; `rw:bodies` persistence |
+| `adapters/physics.js` | world grid adapter: `tryMove` only authorises a cell (clears the water it enters, invalidates the bridge cache) because the visible body is the proxy entity, not a block; splash/impact presentation; entity damage from impact energy; `/rw:physics` API; `rw:bodies` persistence; `/rw:physics clear` materialises every body back into blocks |
 | `DEFAULT_PHYSICS` | gravity 24, max 55 m/s, punch impulse 3000 N*s, 8 cells/tick anti-tunnel cap |
 
 ### Smooth motion
@@ -183,8 +184,9 @@ smoothness is in the render layer:
 
 | Piece | Role |
 | --- | --- |
-| `rw:body_<class>` entities (8: stone, dirt, sand, wood, metal, wool, ice, leaves) | physics disabled (`has_gravity`/`has_collision` false), persistent, damage-immune, 1x1x1 collision box |
-| `geometry.rw_physics_body` | 16x16x16 cube, uv 0..16, one 16x16 proxy texture per class |
+| `rw:body_<block>` entities (79: 75 block types + 4 material classes) | physics disabled (`has_gravity`/`has_collision` false), persistent, damage-immune, 1x1x1 collision box, family `rw_body` for sweeping strays |
+| `geometry.rw_physics_body` | 16x16x16 cube, uv 0..16. Each client entity points at either a **vanilla block texture** (`textures/blocks/...`, so the flying cube wears the real block texture — every filename was checked against Mojang/bedrock-samples) or one of four generated material-class textures (wood, metal, wool, leaves) |
+| `bodyEntityId()` + spawn probe | the adapter asks for `rw:body_<slug>` first and falls back to `rw:body_<class>`; the identifier that worked is cached per block type, so an unlisted block still flies as its material and only a total failure switches to `mode=blocks` |
 | `controller.render.rw_physics_body` | shared controller: Geometry.default / Material.default / Texture.default, so each client entity carries its own material |
 | `adapters/physics.js` tick | teleports each proxy to `prev + clamp(target - prev, maxStep)` every tick; `maxStep = max(0.35, speed/20 * 1.8)` so it tracks velocity without lagging behind or overshooting |
 | `body.settled` (core) | set when a body sleeps; the adapter then removes the proxy and writes the real block permutation at the body cell, falling back to the cell above and finally to dropping the item so no block is ever deleted |

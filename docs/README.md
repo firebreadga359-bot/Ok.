@@ -37,19 +37,21 @@ No commands are needed for the basics:
 * Place **normal sand** → that block becomes realistic sand and joins the granular
   solver. Using normal sand on an existing realistic sand block stacks a layer.
 
-The dedicated items still exist and behave the same way:
+Everything the pack adds is in the **creative inventory**: open it and search
+`Realistic` (category *Nature* for water and sand, *Items* for the bucket and the
+converter). No `/give`, no commands needed:
 
-```
-/give @s rw:realistic_water_bucket
-/give @s rw:realistic_sand 16
-```
+* **Realistic Water** places as a full block and joins the simulation at once.
+* **Realistic Sand** places as a full 8-layer block; place more on top and the
+  solver merges the layers.
+* **Realistic Water Spring** is an endless source, for when you want one by hand.
+* **Realistic Water Bucket** — right-click a block to pour a spring; sneak +
+  right-click realistic water to lift it back.
+* **Physics Converter** — turns any block into a physics body (see below).
 
-* Right-click a block with the **bucket** → pours a **spring** that keeps feeding
-  water. Sneak + right-click a realistic water block → fills the bucket back.
-* Place **Realistic Sand** repeatedly on the same block to build up to 8 layers;
-  piles avalanche, sink through water and get washed downstream.
-* `/rw:ball 4` drops a 4×4×4 water body in front of you; `/rw:sand 3` drops sand.
-* `/rw:stats` shows live solver numbers, `/rw:help` lists everything.
+In survival the same blocks come from conversion: pour with a normal water bucket,
+place normal sand, or craft the converter from 8 iron ingots around redstone.
+`/rw:stats` shows live solver numbers, `/rw:help` lists everything.
 
 ### Commands
 
@@ -58,9 +60,7 @@ The dedicated items still exist and behave the same way:
 | `/rw:stats` | cells, field size, substeps, max speed, whitewater count |
 | `/rw:pause` | pause/resume the simulation (persisted) |
 | `/rw:reload` | re-read water/sand blocks around you into a fresh field |
-| `/rw:ball [size]` | drop a cube of water (default 3) |
-| `/rw:sand [size]` | drop a cube of sand (default 2) |
-| `/rw:remove water\|sand\|all` | delete simulated blocks in the field |
+| `/rw:remove water\|sand\|all` | delete simulated blocks within 12 blocks of you |
 | `/rw:set <name> <value>` | change any solver setting (see `/rw:settings`) |
 | `/rw:quality low\|medium\|high\|ultra` | field size / budget presets |
 | `/rw:help` | command list |
@@ -108,15 +108,18 @@ reasons, and `docs/TECHNICAL_REPORT.md` for the feature-by-feature mapping.
 ## Block physics: the converter
 
 The add-on also ships a **Physics Converter** block (`rw:physics_converter`,
-crafted from 8 iron ingots around a redstone core, or `/give @s rw:physics_converter`).
+crafted from 8 iron ingots around a redstone core, or taken from the creative
+inventory).
 Use it while holding any block: one of that block leaves your hand and becomes a
 physics body thrown where you look. Punch a body with an empty hand to shove it.
 
 Airborne bodies are drawn by a full-size proxy cube that is interpolated between
-blocks every tick, so they fly and fall smoothly; the proxy wears the block's
-material (stone, sand, dirt, wood, metal, wool, ice, leaves). When a body comes to
-rest the proxy is removed and the **exact block** is placed, so what you end up
-with is the real block. Every block keeps its own mass in kg:
+blocks every tick, so they fly and fall smoothly. The cube wears the block's
+**real texture** for 75 block types (stone, cobblestone, deepslate, dirt, sand,
+gravel, logs, planks, wool, ice, glass, obsidian, metal blocks, …) and a material
+class texture for everything else, so a flying block looks like itself. When a
+body comes to rest the proxy is removed and the **exact block** is placed. Every
+block keeps its own mass in kg:
 
 | block | mass | in water |
 | --- | --- | --- |

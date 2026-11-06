@@ -128,10 +128,12 @@ These are **not** passes. They are untested and must be verified on a device:
 
 1. Import `dist/RealisticWater-Bedrock.mcaddon`; confirm both packs appear.
 2. New flat world, both packs active, no experiments; check Content Log is clean.
-3. `/give @s rw:realistic_water_bucket`, use it on the ground → spring appears and
+3. Take **Realistic Water Bucket** and **Realistic Sand** from the Creative
+   inventory (no `/give`, no command); use them on the ground → spring appears and
    keeps flowing; `/rw:stats` shows cells > 0.
-4. `/rw:ball 5` on a slope → water runs downhill, pools, and settles (levels stop
-   changing). `/rw:remove water` clears it.
+4. Place the **Realistic Water** and **Realistic Sand** blocks from the inventory
+   on a slope → water runs downhill, pools, and settles (levels stop changing).
+   `/rw:remove water` clears it.
 5. Build a 1-block wall in the flow → water goes around, not through.
 6. Drop water off a ledge → falling column, foam at the impact point, splash audio.
 7. Place `rw:realistic_sand` 8 times on one block, then break the bottom → the pile
@@ -140,7 +142,8 @@ These are **not** passes. They are untested and must be verified on a device:
 9. Save, quit, re-enter → water/sand levels are where you left them.
 10. Second device/player joins → both see the same water; non-op cannot use `/rw:*`.
 11. `/rw:set filmFriction 60`, `/rw:quality low|ultra` → no errors, behaviour changes.
-12. If commands are missing, repeat step 3 with `/scriptevent rw:ball 5`.
+12. `/rw:remove water` still works as fallback; `/rw:ball`/`/rw:sand` were
+   removed (blocks come from the creative inventory instead).
 
 ## 8. v1.2 - why "nothing worked" and what was fixed
 

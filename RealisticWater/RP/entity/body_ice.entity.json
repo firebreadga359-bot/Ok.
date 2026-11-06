@@ -7,7 +7,7 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/entity/rw_body_ice"
+        "default": "textures/blocks/ice"
       },
       "geometry": {
         "default": "geometry.rw_physics_body"

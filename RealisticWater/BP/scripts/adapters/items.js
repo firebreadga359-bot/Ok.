@@ -7,7 +7,7 @@
  *   - sand stacks up to 8 layers when the same item is used on it
  */
 import * as mc from '@minecraft/server';
-import { BUCKET_ID, SAND_ID, WATER_ID, SOURCE_ID, LAYERS_STATE, readCell, placeSourceBlock } from './bedrock.js';
+import { BUCKET_ID, SAND_ID, WATER_ID, SOURCE_ID, readCell, placeSourceBlock } from './bedrock.js';
 
 function countItem(player, typeId) {
   try {
@@ -84,30 +84,27 @@ export function registerItems(ctx) {
     }
     if (!isCreative(player)) {
       consumeOne(player, BUCKET_ID);
-      giveItem(player, 'minecraft:bucket', 1);
+      if (!giveItem(player, 'minecraft:bucket', 1)) {
+        // never swallow the empty bucket: drop it if the inventory is full
+        try { dimension.spawnItem(new mc.ItemStack('minecraft:bucket', 1), player.location); } catch { /* ignore */ }
+      }
     }
   };
 
+  /** The event fires once per hand; act on the first occurrence only. */
+  const firstEvent = (ev) => ev.isFirstEvent !== false;
+
   try {
     mc.world.afterEvents.playerInteractWithBlock.subscribe((ev) => {
+      if (!firstEvent(ev)) return;
       const player = ev.player;
       const item = ev.itemStack;
       if (!item) return;
       const dimension = player.dimension;
 
-      // --- sand layer stacking (RealisticSandBlock.canBeReplaced) ---
-      if (item.typeId === SAND_ID && ev.block?.typeId === SAND_ID) {
-        try {
-          const layers = ev.block.permutation.getState(LAYERS_STATE) ?? 8;
-          if (layers >= 8) return;
-          ev.block.setPermutation(mc.BlockPermutation.resolve(SAND_ID, { [LAYERS_STATE]: layers + 1 }));
-          if (!isCreative(player)) consumeOne(player, SAND_ID);
-          const bridge = api.bridges.get(dimension.id);
-          bridge?.invalidate(ev.block.location.x, ev.block.location.y, ev.block.location.z);
-        } catch { /* ignore */ }
-        return;
-      }
-
+      // No sand special case here: placing the sand item next to sand already
+      // creates a realistic sand block, and the solver merges the layers. Doing
+      // both would consume two blocks for one placement.
       if (item.typeId !== BUCKET_ID) return;
 
       // sneaking on our water: fill the bucket (pick the water up)
@@ -121,10 +118,7 @@ export function registerItems(ctx) {
           if (i >= 0) { f.vol[i] = 0; f.source[i] = 0; }
           bridge.invalidate(loc.x, loc.y, loc.z);
         }
-        if (!isCreative(player)) {
-          consumeOne(player, BUCKET_ID);
-          giveItem(player, BUCKET_ID, 1);
-        }
+        // the bucket in hand stays; only the water was lifted
         return;
       }
 

@@ -5,14 +5,14 @@
       "identifier": "rw:realistic_sand",
       "states": {
         "rw:layers": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
+          8,
           7,
-          8
+          6,
+          5,
+          4,
+          3,
+          2,
+          1
         ]
       },
       "menu_category": {

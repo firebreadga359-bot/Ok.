@@ -149,27 +149,6 @@ function warnTooBig(player) {
   } catch { /* player left */ }
 }
 
-/** Stack a layer when vanilla sand is used on a realistic sand block. */
-function stackVanillaSand(player, block) {
-  try {
-    const layers = block.permutation.getState(LAYERS_STATE) ?? 8;
-    if (layers >= 8) return false;
-    block.setPermutation(mc.BlockPermutation.resolve(SAND_ID, { [LAYERS_STATE]: layers + 1 }));
-    const container = player.getComponent('minecraft:inventory')?.container;
-    if (container) {
-      for (let s = 0; s < container.size; s++) {
-        const it = container.getItem(s);
-        if (it && it.typeId === VANILLA_SAND) {
-          if (it.amount <= 1) container.setItem(s, undefined);
-          else { it.amount -= 1; container.setItem(s, it); }
-          break;
-        }
-      }
-    }
-    return true;
-  } catch { return false; }
-}
-
 /**
  * @param {{bridges:Map<string,any>, settings:object, world:any}} ctx
  */
@@ -199,14 +178,10 @@ export function installVanilla(ctx) {
   //    for fluid placement on the current build.
   try {
     mc.world.afterEvents.playerInteractWithBlock.subscribe((ev) => {
+      if (ev.isFirstEvent === false) return; // the event fires once per hand
       const item = ev.itemStack;
       const player = ev.player;
       if (!item || !player) return;
-
-      if (item.typeId === VANILLA_SAND && ev.block?.typeId === SAND_ID) {
-        stackVanillaSand(player, ev.block);
-        return;
-      }
       if (item.typeId !== WATER_BUCKET || player.isSneaking) return;
 
       const off = faceOffset(ev.blockFace);

@@ -19,8 +19,6 @@ export const COMMAND_HELP = [
   '/rw:stats - simulation statistics',
   '/rw:pause - pause or resume the simulation',
   '/rw:reload - re-read realistic water/sand around you',
-  '/rw:ball [size] - drop a cube of water',
-  '/rw:sand [size] - drop a cube of sand',
   '/rw:remove water|sand|all - delete simulated blocks near you',
   '/rw:set <name> <value> - change a simulation setting',
   '/rw:settings - list settings',
@@ -73,10 +71,6 @@ export function registerCommands(api) {
       }),
     make('rw:reload', 'Re-read realistic water and sand blocks around you', [],
       (origin) => { api.reload(origin); reply(origin, 'Re-reading realistic water/sand around you'); }),
-    make('rw:ball', 'Drop a cube of realistic water in front of you', [{ name: 'size', type: 'int', optional: true }],
-      (origin, args) => { reply(origin, api.ball(origin, args?.[0] ?? 3, 'WATER')); }),
-    make('rw:sand', 'Drop a cube of realistic sand in front of you', [{ name: 'size', type: 'int', optional: true }],
-      (origin, args) => { reply(origin, api.ball(origin, args?.[0] ?? 2, 'SAND')); }),
     make('rw:remove', 'Remove simulated water or sand around you', [{ name: 'what', type: 'string', optional: true }],
       (origin, args) => { reply(origin, api.removeAll(origin, args?.[0] ?? 'all')); }),
     make('rw:set', 'Change a simulation setting', [{ name: 'name', type: 'string' }, { name: 'value', type: 'string' }],
@@ -111,7 +105,7 @@ export function registerCommands(api) {
           reply(origin, player ? sim.convertAhead(player) : 'Run this as a player');
           return;
         }
-        if (mode === 'clear') { reply(origin, `removed ${sim.clear()} physics bodies`); return; }
+        if (mode === 'clear') { reply(origin, `put ${sim.clear()} physics bodies back as blocks`); return; }
         reply(origin, sim.statsLine());
       }),
     make('rw:diag', 'Report which subsystems loaded', [],
@@ -179,12 +173,6 @@ export function handleScriptEvent(event, api) {
       api.reload(origin);
       reply(origin, 'Re-reading realistic water/sand around you');
       return true;
-    case 'ball':
-      reply(origin, api.ball(origin, Number(args[0] ?? 3) || 3, 'WATER'));
-      return true;
-    case 'sand':
-      reply(origin, api.ball(origin, Number(args[0] ?? 2) || 2, 'SAND'));
-      return true;
     case 'remove':
       reply(origin, api.removeAll(origin, args[0] ?? 'all'));
       return true;
@@ -214,7 +202,7 @@ export function handleScriptEvent(event, api) {
       } else if (mode === 'convert') {
         reply(origin, origin.sourceEntity ? sim.convertAhead(origin.sourceEntity) : 'Run this as a player');
       } else if (mode === 'clear') {
-        reply(origin, `removed ${sim.clear()} physics bodies`);
+        reply(origin, `put ${sim.clear()} physics bodies back as blocks`);
       } else {
         reply(origin, sim.statsLine());
       }

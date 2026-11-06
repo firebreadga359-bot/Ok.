@@ -97,6 +97,20 @@ const MASS_RULES = [
 /** Material classes used by the visual proxy entity (see adapters/physics.js). */
 export const BODY_CLASSES = ['stone', 'dirt', 'sand', 'wood', 'metal', 'wool', 'ice', 'leaves'];
 
+/**
+ * Proxy entity id for a body: `minecraft:white_wool` -> `rw:body_white_wool`.
+ *
+ * The asset generator creates one entity per block type, textured with the real
+ * vanilla block texture, plus one per material class for everything else. The
+ * adapter asks for the exact id first and falls back to the class id, so a block
+ * type without a proxy still flies as its material.
+ */
+export function bodyEntityId(typeId) {
+  const bare = String(typeId ?? '').split(':').pop().toLowerCase();
+  const slug = bare.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  return `rw:body_${slug || 'block'}`;
+}
+
 /** Which proxy texture an airborne body uses, chosen from its block id. */
 export function bodyClass(typeId) {
   const id = String(typeId ?? '').replace('minecraft:', '');

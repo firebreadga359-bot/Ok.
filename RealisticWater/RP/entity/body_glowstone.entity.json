@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "rw:body_glowstone",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/blocks/glowstone"
+      },
+      "geometry": {
+        "default": "geometry.rw_physics_body"
+      },
+      "render_controllers": [
+        "controller.render.rw_physics_body"
+      ]
+    }
+  }
+}
