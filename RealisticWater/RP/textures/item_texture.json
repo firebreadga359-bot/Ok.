@@ -1,0 +1,9 @@
+{
+  "resource_pack_name": "realistic-water",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "rw_realistic_water_bucket": {
+      "textures": "textures/items/rw_water_bucket"
+    }
+  }
+}

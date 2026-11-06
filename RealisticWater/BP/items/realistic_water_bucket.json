@@ -1,0 +1,23 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:item": {
+    "description": {
+      "identifier": "rw:realistic_water_bucket",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "rw_realistic_water_bucket"
+        }
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:display_name": {
+        "value": "Realistic Water Bucket"
+      },
+      "minecraft:hand_equipped": false
+    }
+  }
+}

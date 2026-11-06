@@ -1,0 +1,6 @@
+pack.name=Realistic Water (Bedrock port) BP
+pack.description=Volume-conserving water and granular sand simulation. Modified port of Realistic Water by Skaffy.
+block.rw:realistic_water=Realistic Water
+block.rw:realistic_water_source=Realistic Water Spring
+block.rw:realistic_sand=Realistic Sand
+item.rw:realistic_water_bucket=Realistic Water Bucket

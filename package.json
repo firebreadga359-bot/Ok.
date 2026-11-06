@@ -1,0 +1,12 @@
+{
+  "name": "realistic-water-bedrock",
+  "private": true,
+  "type": "module",
+  "description": "Bedrock port tooling for Realistic Water 1.1 (Java/Fabric) - analysis, asset generation, validation and pure-JS simulation tests",
+  "scripts": {
+    "gen": "python3 tools/gen_assets.py",
+    "build": "python3 tools/build.py",
+    "validate": "python3 tools/validate.py",
+    "test": "node tools/tests/run.mjs"
+  }
+}

@@ -1,0 +1,10 @@
+# Local toolchain (JDK + decompiler), not part of the deliverable and far above GitHub limits
+tools/
+
+# Decompiled third-party mod sources, kept local for reference only
+analysis/
+
+# Python / editor noise
+__pycache__/
+*.pyc
+.DS_Store

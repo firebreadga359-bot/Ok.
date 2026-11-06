@@ -1,0 +1,192 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "rw:realistic_water",
+      "states": {
+        "rw:level": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.rw_water_h15"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "rw_water_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "up": {
+          "texture": "rw_water_top",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "down": {
+          "texture": "rw_water_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        }
+      },
+      "minecraft:collision_box": false,
+      "minecraft:selection_box": false,
+      "minecraft:light_dampening": 0,
+      "minecraft:light_emission": 0,
+      "minecraft:destructible_by_mining": false,
+      "minecraft:destructible_by_explosion": false,
+      "minecraft:friction": 0.9,
+      "minecraft:replaceable": {},
+      "minecraft:map_color": "#1F5C6E"
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('rw:level') == 0",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h0"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 1",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h1"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 2",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h2"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 3",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h3"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 4",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h4"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 5",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h5"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 6",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h6"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 7",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h7"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 8",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h8"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 9",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h9"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 10",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h10"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 11",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h11"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 12",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h12"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 13",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h13"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 14",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h14"
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:level') == 15",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_water_h15"
+          }
+        }
+      }
+    ]
+  }
+}

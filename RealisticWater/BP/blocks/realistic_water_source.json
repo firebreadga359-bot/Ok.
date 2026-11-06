@@ -1,0 +1,41 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "rw:realistic_water_source"
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.rw_water_source"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "rw_water_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "up": {
+          "texture": "rw_water_top",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        },
+        "down": {
+          "texture": "rw_water_side",
+          "render_method": "blend",
+          "face_dimming": false,
+          "ambient_occlusion": false
+        }
+      },
+      "minecraft:collision_box": false,
+      "minecraft:selection_box": false,
+      "minecraft:light_dampening": 0,
+      "minecraft:light_emission": 0,
+      "minecraft:destructible_by_mining": false,
+      "minecraft:destructible_by_explosion": false,
+      "minecraft:friction": 0.9,
+      "minecraft:map_color": "#1F5C6E"
+    }
+  }
+}

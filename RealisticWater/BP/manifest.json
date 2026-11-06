@@ -1,0 +1,42 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Realistic Water (Bedrock port) BP",
+    "description": "Realistic Water 1.1 port - volume-conserving water simulation, granular sand simulation, whitewater, flow audio, commands. Original Java mod by Skaffy (https://github.com/sskaffy/Realistic-Water). This is a MODIFIED port for Bedrock, not the original mod.",
+    "uuid": "7f3c1a52-9b4e-4c1d-8a67-2d5e0b91c4a7",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 2]
+  },
+  "modules": [
+    {
+      "description": "Blocks, items, loot tables",
+      "type": "data",
+      "uuid": "1c9d5b34-6e2f-4a8b-9d71-3f0c5e8a2b64",
+      "version": [1, 0, 0]
+    },
+    {
+      "description": "Water/sand simulation, rendering drivers, commands",
+      "type": "script",
+      "language": "javascript",
+      "entry": "scripts/main.js",
+      "uuid": "5a2e7c19-4b6d-4f83-a1c9-7e0d2b84f3d5",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "d4b8e271-3c6a-4f59-8b12-9e7a5c3d6f08",
+      "version": [1, 0, 0]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.1.0"
+    }
+  ],
+  "metadata": {
+    "authors": ["Skaffy (original Java mod)", "Bedrock port"],
+    "license": "Custom License - see LICENSE_realistic-water",
+    "url": "https://github.com/sskaffy/Realistic-Water",
+    "product_type": "addon"
+  }
+}

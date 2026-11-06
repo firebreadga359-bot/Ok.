@@ -1,0 +1,22 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Realistic Water (Bedrock port) RP",
+    "description": "Water/sand block geometry, procedural surface textures, foam/spray particles and underwater fog for the Realistic Water Bedrock port. Modified port of Realistic Water by Skaffy.",
+    "uuid": "d4b8e271-3c6a-4f59-8b12-9e7a5c3d6f08",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 2]
+  },
+  "modules": [
+    {
+      "description": "Geometry, textures, particles, fog",
+      "type": "resources",
+      "uuid": "8e6f2a94-7d1b-4c35-b0e8-4a9c1f7b2d63",
+      "version": [1, 0, 0]
+    }
+  ],
+  "metadata": {
+    "authors": ["Skaffy (original Java mod)", "Bedrock port"],
+    "url": "https://github.com/sskaffy/Realistic-Water"
+  }
+}

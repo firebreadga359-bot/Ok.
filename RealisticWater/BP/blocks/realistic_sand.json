@@ -1,0 +1,334 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "rw:realistic_sand",
+      "states": {
+        "rw:layers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      "menu_category": {
+        "category": "nature"
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.rw_sand_l8"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "rw_sand_side",
+          "render_method": "opaque"
+        },
+        "up": {
+          "texture": "rw_sand_top",
+          "render_method": "opaque"
+        },
+        "down": {
+          "texture": "rw_sand_side",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:collision_box": {
+        "origin": [
+          -8,
+          0,
+          -8
+        ],
+        "size": [
+          16,
+          15,
+          16
+        ]
+      },
+      "minecraft:selection_box": {
+        "origin": [
+          -8,
+          0,
+          -8
+        ],
+        "size": [
+          16,
+          16,
+          16
+        ]
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 0.5
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 3
+      },
+      "minecraft:friction": 0.7,
+      "minecraft:light_dampening": 0,
+      "minecraft:map_color": "#DCC08A",
+      "minecraft:loot": "loot_tables/blocks/realistic_sand.json"
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('rw:layers') == 1",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l1"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              1,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              2,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 2",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l2"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              3,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              4,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 3",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l3"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              5,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              6,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 4",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l4"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              7,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              8,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 5",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l5"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              9,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              10,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 6",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l6"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              11,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              12,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 7",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l7"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              13,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              14,
+              16
+            ]
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('rw:layers') == 8",
+        "components": {
+          "minecraft:geometry": {
+            "identifier": "geometry.rw_sand_l8"
+          },
+          "minecraft:collision_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              15,
+              16
+            ]
+          },
+          "minecraft:selection_box": {
+            "origin": [
+              -8,
+              0,
+              -8
+            ],
+            "size": [
+              16,
+              16,
+              16
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
